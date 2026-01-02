@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1200</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MugDiffusion Player</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true">background-color: #121212; color: white; font-family: 'Segoe UI', Arial;</string>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_Main">
+    <item>
+     <!-- 左侧统计面板 -->
+     <widget class="QGroupBox" name="groupBoxStats">
+      <property name="title">
+       <string>Statistics</string>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QGroupBox { border: 1px solid #444; border-radius: 5px; margin-top: 10px; font-weight: bold; } QGroupBox::title { subcontrol-origin: margin; left: 10px; }</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_Left">
+       <item>
+        <widget class="QLabel" name="lblScore">
+         <property name="font">
+          <font>
+           <pointsize>24</pointsize>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">border-bottom: 2px solid #333; padding-bottom: 10px;</string>
+         </property>
+         <property name="text">
+          <string>0000000</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_1">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <!-- 统计行布局 -->
+       <item>
+        <layout class="QFormLayout" name="formLayout">
+         <property name="labelAlignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+         <property name="formAlignment">
+          <set>Qt::AlignHCenter|Qt::AlignTop</set>
+         </property>
+         <property name="horizontalSpacing">
+          <number>20</number>
+         </property>
+         <property name="verticalSpacing">
+          <number>10</number>
+         </property>
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_P">
+           <property name="text"><string>PERFECT</string></property>
+           <property name="styleSheet"><string>color: #aaa;</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLabel" name="lblPerfect">
+           <property name="text"><string>0</string></property>
+           <property name="styleSheet"><string>color: #00FFFF; font-weight: bold; font-size: 16pt;</string></property>
+           <property name="alignment"><set>Qt::AlignRight</set></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_Gr">
+           <property name="text"><string>GREAT</string></property>
+           <property name="styleSheet"><string>color: #aaa;</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLabel" name="lblGreat">
+           <property name="text"><string>0</string></property>
+           <property name="styleSheet"><string>color: #00FF00; font-weight: bold; font-size: 16pt;</string></property>
+           <property name="alignment"><set>Qt::AlignRight</set></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_Go">
+           <property name="text"><string>GOOD</string></property>
+           <property name="styleSheet"><string>color: #aaa;</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLabel" name="lblGood">
+           <property name="text"><string>0</string></property>
+           <property name="styleSheet"><string>color: #0000FF; font-weight: bold; font-size: 16pt;</string></property>
+           <property name="alignment"><set>Qt::AlignRight</set></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_M">
+           <property name="text"><string>MISS</string></property>
+           <property name="styleSheet"><string>color: #aaa;</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLabel" name="lblMiss">
+           <property name="text"><string>0</string></property>
+           <property name="styleSheet"><string>color: #FF0000; font-weight: bold; font-size: 16pt;</string></property>
+           <property name="alignment"><set>Qt::AlignRight</set></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_Combo_Title">
+         <property name="text"><string>COMBO</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>color: #888;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblCombo">
+         <property name="text"><string>0</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>font-size: 20pt; font-weight: bold;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_MaxCombo_Title">
+         <property name="text"><string>MAX COMBO</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>color: #888; margin-top: 5px;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblMaxCombo">
+         <property name="text"><string>0</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>font-size: 16pt; font-weight: bold; color: #FFAA00;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_Acc_Title">
+         <property name="text"><string>ACCURACY</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>color: #888; margin-top: 10px;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblAcc">
+         <property name="text"><string>100.00%</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>font-size: 20pt; font-weight: bold;</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    
+    <!-- 中间：游戏占位容器 -->
+    <item>
+     <widget class="QWidget" name="gameContainer" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>400</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>600</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: black;</string>
+      </property>
+     </widget>
+    </item>
+    
+    <!-- 右侧：信息面板 -->
+    <item>
+     <widget class="QGroupBox" name="groupBoxInfo">
+      <property name="title">
+       <string>Song Info</string>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QGroupBox { border: 1px solid #444; border-radius: 5px; margin-top: 10px; font-weight: bold; } QGroupBox::title { subcontrol-origin: margin; left: 10px; }</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_Right">
+       <item>
+        <widget class="QLabel" name="lblTitle">
+         <property name="text"><string>No Song Loaded</string></property>
+         <property name="styleSheet"><string>font-size: 16pt; font-weight: bold;</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblArtist">
+         <property name="text"><string/></property>
+         <property name="styleSheet"><string>color: #aaa; font-size: 12pt;</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_4">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_Prog">
+            <property name="text">
+            <string>Progress:</string>
+            </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QProgressBar" name="progressBar">
+         <property name="value"><number>0</number></property>
+         <property name="textVisible"><bool>false</bool></property>
+         <property name="styleSheet">
+          <string notr="true">QProgressBar { border: 1px solid #333; border-radius: 4px; background: #222; min-height: 10px; max-height: 10px; } QProgressBar::chunk { background-color: #00AAFF; border-radius: 4px; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblTime">
+         <property name="text"><string>00:00 / 00:00</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>color: #888; font-family: monospace;</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_5">
+         <property name="orientation"><enum>Qt::Vertical</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnOpen">
+         <property name="text"><string>Load Beatmap (.osu)</string></property>
+         <property name="styleSheet"><string>background: #333; color: white; padding: 10px; border-radius: 5px; text-align: left;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnSettings">
+         <property name="text"><string>Settings</string></property>
+         <property name="styleSheet"><string>background: #333; color: white; padding: 10px; border-radius: 5px; text-align: left;</string></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <widget class="QMenu" name="menuFile"><property name="title"><string>File</string></property>
+    <addaction name="actionOpen"/>
+   </widget>
+   <widget class="QMenu" name="menuEdit"><property name="title"><string>Edit</string></property>
+    <addaction name="actionSettings"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuEdit"/>
+  </widget>
+  <action name="actionOpen"><property name="text"><string>Open...</string></property></action>
+  <action name="actionSettings"><property name="text"><string>Settings</string></property></action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
