@@ -7,6 +7,12 @@
 #include <QKeyEvent>
 #include <cmath>
 #include <QSettings>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QDebug>
+#include <QPainterPath>
 
 GameWidget::GameWidget(QWidget *parent) : QOpenGLWidget(parent) { // 构造函数改为 QOpenGLWidget
     setFocusPolicy(Qt::StrongFocus);
@@ -25,10 +31,13 @@ GameWidget::GameWidget(QWidget *parent) : QOpenGLWidget(parent) { // 构造函�
 }
 
 qint64 GameWidget::getSmoothTime() const {
-    if (!m_isPlaying) return 0;
-    // 返回：从开始播放到现在经过的毫秒数
-    // QElapsedTimer 的精度是纳秒级的，非常平滑
-    return m_visualTimer.elapsed();
+    if (m_preGameCountingDown) {
+        // 在倒计时期间，实际游戏时间应该是负数，或者从0开始，这样Note才会在屏幕上方
+        // smoothTime = 经过的时间 - 延迟时间 - 额外偏移
+        return m_visualTimer.elapsed() - (m_preGameStartTime + m_config.preGameDelay) - m_config.audioOffset;
+    }
+    // 游戏开始后，就按照正常逻辑
+    return m_visualTimer.elapsed() - m_preGameStartTime - m_config.audioOffset;
 }
 
 void GameWidget::updateConfig(const GameConfig &config) {
@@ -39,6 +48,9 @@ void GameWidget::updateConfig(const GameConfig &config) {
 void GameWidget::resetGame() {
     m_player->stop();
     m_isPlaying = false;
+
+    m_preGameCountingDown = false;
+    m_preGameStartTime = 0;
 
     m_score = 0; m_combo = 0; m_maxCombo = 0;
     m_totalHits = 0; m_totalAccWeight = 0;
@@ -84,6 +96,7 @@ void GameWidget::loadBeatmap(const QString &filePath) {
         else if (line.startsWith("TitleUnicode:")) m_currentTitle = line.mid(13).trimmed(); // 优先用 Unicode
         else if (line.startsWith("Artist:")) m_currentArtist = line.mid(7).trimmed();
         else if (line.startsWith("ArtistUnicode:")) m_currentArtist = line.mid(14).trimmed();
+        else if (line.startsWith("Version:")) m_currentVersion = line.mid(8).trimmed();
 
         if (line.startsWith("AudioFilename:")) {
             audioFilename = line.split(":").last().trimmed();
@@ -141,26 +154,57 @@ void GameWidget::loadBeatmap(const QString &filePath) {
     }
     if (QFile::exists(audioPath)) {
         m_player->setSource(QUrl::fromLocalFile(audioPath));
-        int lastNoteTime = m_notes.empty() ? 0 : m_notes.back().endTime;
-        m_songDuration = lastNoteTime + 3000; // 多给3秒
 
-        // 连接 duration 信号以获取准确时长
-        connect(m_player, &QMediaPlayer::durationChanged, this, [this](qint64 dur){
-            m_songDuration = dur;
-            // 再次更新一下 UI 信息
-            emit songLoaded(m_currentTitle, m_currentArtist, m_songDuration);
+        // 1. 获取最后一个 Note 的时间
+        int lastNoteTime = m_notes.empty() ? 0 : m_notes.back().endTime;
+
+        // 2. 先设置一个保底时长 (最后 Note + 3秒)
+        m_songDuration = lastNoteTime + 3000;
+
+        // 3. 连接 duration 信号
+        disconnect(m_player, &QMediaPlayer::durationChanged, nullptr, nullptr);
+        connect(m_player, &QMediaPlayer::durationChanged, this, [this, lastNoteTime](qint64 dur){
+            if (dur > 0) {
+                // 取 音频时长 和 谱面结束+3s 的最大值
+                m_songDuration = std::max((qint64)lastNoteTime + 3000, dur);
+                qDebug() << "Duration Updated:" << m_songDuration;
+                emit songLoaded(m_currentTitle, m_currentArtist, m_songDuration);
+            }
         });
 
-        m_player->play();
-        m_visualTimer.restart();
-        m_isPlaying = true;
+        m_visualTimer.restart(); // 视觉计时器开始跑，用于倒计时
+        m_preGameCountingDown = true; // 标记进入倒计时状态
+        m_preGameStartTime = m_visualTimer.elapsed(); // 记录倒计时开始时刻
+        m_isPlaying = false; // 游戏本身还没开始，只是在倒计时
 
+        qDebug() << "Pre-game countdown started for" << m_config.preGameDelay << "ms.";
         // === 发射信号：通知主窗口歌曲加载完毕 ===
         emit songLoaded(m_currentTitle, m_currentArtist, m_songDuration);
+        qDebug() << "Game Started. Initial Duration:" << m_songDuration;
     }
 }
 
 void GameWidget::gameLoop() {
+    // 1. 处理倒计时状态
+    if (m_preGameCountingDown) {
+        qint64 elapsedSinceCountdownStart = m_visualTimer.elapsed() - m_preGameStartTime;
+        if (elapsedSinceCountdownStart >= m_config.preGameDelay) {
+            // 倒计时结束，真正开始游戏！
+            m_preGameCountingDown = false;
+            m_isPlaying = true; // 游戏正式开始
+            m_player->play(); // 播放音乐
+
+            // 重启 visualTimer 以确保 getSmoothTime 能够从 0 准确开始
+            m_visualTimer.restart();
+            // 这里的 m_preGameStartTime 现在代表的是游戏真正开始的时刻 (0ms)
+            m_preGameStartTime = m_visualTimer.elapsed();
+
+            qDebug() << "Game started after delay. Playing music.";
+        }
+        update(); // 倒计时期间也要刷新画面
+        return; // 倒计时期间不执行后续的游戏逻辑
+    }
+
     if (!m_isPlaying) {
         update();
         return;
@@ -169,16 +213,22 @@ void GameWidget::gameLoop() {
     qint64 audioTime = m_player->position();
     qint64 currentTime = getSmoothTime();
 
-    // === 修复 2: 进度条数字限制 ===
-    // 如果当前时间超过总时长，强制显示为总时长
+    bool timeIsUp = (m_songDuration > 0 && currentTime > m_songDuration + 1000);
+    bool playerStopped = (currentTime > 1000 && m_player->playbackState() == QMediaPlayer::StoppedState);
+
+
+    if (timeIsUp || playerStopped) {
+        qDebug() << "Game Over Triggered! Time:" << currentTime << "Duration:" << m_songDuration;
+        saveRecord();
+        m_isPlaying = false;
+        m_player->stop();
+        update();
+        return; // 结束本帧
+    }
+
     qint64 displayTime = currentTime;
     if (m_songDuration > 0 && displayTime > m_songDuration) {
         displayTime = m_songDuration;
-
-        // 可选：如果音乐真的停了，也可以在这里设置 m_isPlaying = false;
-        if (m_player->playbackState() == QMediaPlayer::StoppedState) {
-            m_isPlaying = false;
-        }
     }
     if (m_songDuration > 0) {
         emit progressChanged(displayTime, m_songDuration);
@@ -196,6 +246,7 @@ void GameWidget::gameLoop() {
                 note.isMissed = true;
                 m_combo = 0;
                 m_countMiss++;
+                m_totalHits++;
                 m_lastJudgmentText = "MISS";
                 m_lastJudgmentColor = Qt::red;
                 m_feedbackTimer = 20;
@@ -211,6 +262,7 @@ void GameWidget::gameLoop() {
                 note.isMissed = true;
                 m_combo = 0;
                 m_countMiss++;
+                m_totalHits++;
                 m_lastJudgmentText = "MISS (Overhold)";
                 m_lastJudgmentColor = Qt::red;
                 m_feedbackTimer = 20;
@@ -341,7 +393,7 @@ void GameWidget::checkHit(int col) {
 
 void GameWidget::paintEvent(QPaintEvent *event) {
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing); // 抗锯齿
+    p.setRenderHint(QPainter::Antialiasing);
     p.fillRect(rect(), Qt::black);
 
     int w = width();
@@ -349,137 +401,165 @@ void GameWidget::paintEvent(QPaintEvent *event) {
     double colWidth = w / 4.0;
     double judgmentY = h * 0.85;
 
-    if (!m_isPlaying) {
-        // 没播放时显示提示
-        p.setPen(Qt::white);
-        p.drawText(rect(), Qt::AlignCenter, "Load .osu to play");
-        return;
-    }
-
-    // 绘制轨道 (代码不变)
+    // ==========================================
+    // 1. 始终绘制轨道和判定线 (作为背景)
+    // ==========================================
     for (int i = 0; i < 4; ++i) {
         double x = i * colWidth;
+        // 按键高亮
         if (m_keysPressed[i]) {
             p.fillRect(QRectF(x, 0, colWidth, h), QColor(255, 255, 255, 40));
             p.fillRect(QRectF(x, judgmentY, colWidth, h - judgmentY), QColor(255, 255, 255, 180));
         }
+        // 轨道线
         p.setPen(QColor(60, 60, 60));
         p.drawLine(x, 0, x, h);
     }
+    // 判定线
     p.setPen(QPen(Qt::red, 2));
     p.drawLine(0, judgmentY, w, judgmentY);
 
-    if (!m_isPlaying) return;
+    // ==========================================
+    // 2. 待机状态判断 (没播放 且 没在倒计时)
+    // ==========================================
+    if (!m_isPlaying && !m_preGameCountingDown) {
+        p.setPen(Qt::white);
+        p.drawText(rect(), Qt::AlignCenter, "Load .osu to play");
+        return; // 只有完全空闲时才不画 Note
+    }
 
-    // === 核心修改：使用平滑时间进行渲染 ===
+    // ==========================================
+    // 3. 计算时间 (核心)
+    // ==========================================
+    // 如果是倒计时期间，getSmoothTime() 会返回负数 (例如 -2000 到 0)
+    // 这样 Note 就会根据计算绘制在屏幕上方，并随着时间推移自然下落
     qint64 smoothTime = getSmoothTime();
 
+    // ==========================================
+    // 4. 绘制 Note (即使在倒计时期间也绘制)
+    // ==========================================
     int noteHeight = 30;
     QColor colors[4] = {QColor(240,240,240), QColor(255,215,0), QColor(240,240,240), QColor(255,215,0)};
 
     for (const auto &note : m_notes) {
-        // 1. 如果完全结束了 (Missed 或者 正常结束且没在按)，就不画
         if (note.isMissed) continue;
-        if (note.isHit && !note.isHold) continue; // 普通Note打完消失
-        if (note.isHit && note.isHold && !note.isHolding) continue; // 长条打完(正常松手)消失
+        if (note.isHit && !note.isHold) continue;
+        if (note.isHit && note.isHold && !note.isHolding) continue;
 
         double x = note.column * colWidth;
 
+        // 计算头部 Y 坐标
+        // 在倒计时期间，smoothTime 是负数。
+        // 假设 diff = note.time - (-2000) = note.time + 2000 (很大)
+        // y = judgmentY - (diff * speed) (很小，甚至负无穷，即在屏幕上方)
+        // 随着 smoothTime 趋向 0，y 会慢慢变大，产生“下坠”效果。
+
         if (note.isHold) {
-            // === 长条绘制逻辑 ===
             double diffEnd = note.endTime - smoothTime;
             double yTail = judgmentY - (diffEnd * m_config.scrollSpeed);
-
             double yHead;
 
-            // 关键：如果正在 Holding，头部锁定在判定线上
             if (note.isHolding) {
                 yHead = judgmentY;
             } else {
-                // 还没打，或者Miss了，头部正常下落
                 double diffHead = note.time - smoothTime;
                 yHead = judgmentY - (diffHead * m_config.scrollSpeed);
             }
 
-            // 视口优化
-            if (yTail > h || yHead < -500) continue;
+            // 宽松的视口优化：只要有一部分在屏幕附近就画
+            // yHead < -1000 表示还在屏幕上方很远的地方，暂时不画，节省性能
+            if (yTail > h || yHead < -2000) continue;
 
-            // 绘制长条身体
             double bodyH = yHead - yTail;
             if (bodyH > 0) {
                 QColor bodyColor = colors[note.column];
                 bodyColor.setAlpha(180);
                 p.setBrush(bodyColor);
                 p.setPen(Qt::NoPen);
-                // 长条本体
                 p.drawRect(QRectF(x + 10, yTail, colWidth - 20, bodyH));
             }
 
-            // 绘制头部 (只有还没打的时候才画头，正在按住时头已经被“吃”了，不需要画)
             if (!note.isHolding) {
                 p.setBrush(colors[note.column]);
                 p.drawRect(QRectF(x + 2, yHead - noteHeight, colWidth - 4, noteHeight));
             }
-
-            // 绘制尾部 (横杠)
             p.setBrush(colors[note.column]);
             p.drawRect(QRectF(x + 2, yTail, colWidth - 4, 5));
 
         } else {
-            // === 普通 Note 绘制 ===
+            // 普通 Note
             double diff = note.time - smoothTime;
             double y = judgmentY - (diff * m_config.scrollSpeed);
-            if (y > h + 50 || y < -100) continue;
+
+            // 视口优化
+            if (y > h + 50 || y < -2000) continue;
+
             p.setBrush(colors[note.column]);
             p.setPen(Qt::NoPen);
             p.drawRect(QRectF(x + 2, y - noteHeight, colWidth - 4, noteHeight));
         }
     }
 
-    // 绘制 HUD
-    // 1. 中间显示分数 (Score)
+    // ==========================================
+    // 5. 绘制 HUD (分数、Combo、评级)
+    // ==========================================
+    // 仅在 HUD 区域绘制，避免遮挡倒计时太严重
     QFont fontScore = p.font();
     fontScore.setFamily("Arial");
     fontScore.setPointSize(28);
     fontScore.setBold(true);
     p.setFont(fontScore);
     p.setPen(Qt::white);
-
     QString scoreText = QString("%1").arg(m_score, 7, 10, QChar('0'));
+    p.drawText(QRect(0, 10, w, 50), Qt::AlignCenter, scoreText);
 
-    // 绘制在顶部中央 (y=50)
-    QRect scoreRect(0, 10, w, 50);
-    p.drawText(scoreRect, Qt::AlignCenter, scoreText);
-
-    // 2. 绘制评级 (Grade) 在分数下面
     QFont fontGrade = fontScore;
     fontGrade.setPointSize(40);
     fontGrade.setItalic(true);
     p.setFont(fontGrade);
-
     QString grade = getGrade();
     QColor gradeColor = Qt::gray;
-    if (grade == "S") gradeColor = QColor(255, 215, 0); // 金色
+    if (grade == "S") gradeColor = QColor(255, 215, 0);
     else if (grade == "A") gradeColor = Qt::green;
     else if (grade == "B") gradeColor = Qt::cyan;
-
     p.setPen(gradeColor);
-    // 绘制在分数正下方
     p.drawText(QRect(0, 60, w, 60), Qt::AlignCenter, grade);
 
-    // 3. 绘制 Combo (在屏幕中心)
     if (m_combo > 0) {
         QFont fontCombo = p.font();
         fontCombo.setPointSize(40);
         fontCombo.setBold(true);
         p.setFont(fontCombo);
-        p.setPen(QColor(255, 255, 255, 60)); // 更淡一点，防止遮挡
+        p.setPen(QColor(255, 255, 255, 60));
         p.drawText(rect(), Qt::AlignCenter, QString::number(m_combo));
     }
 
-    QFont font = p.font();
-    if (m_feedbackTimer > 0) {
-        m_feedbackTimer--; // 这里其实应该用时间差来减，不过60fps衰减也行
+    // ==========================================
+    // 6. 绘制倒计时 (画在最顶层)
+    // ==========================================
+    if (m_preGameCountingDown) {
+        qint64 timeLeft = m_config.preGameDelay - (m_visualTimer.elapsed() - m_preGameStartTime);
+        int secondsLeft = (timeLeft / 1000) + 1;
+
+        QFont countdownFont = p.font();
+        countdownFont.setFamily("Arial");
+        countdownFont.setPointSize(80);
+        countdownFont.setBold(true);
+        p.setFont(countdownFont);
+
+        // 绘制带描边的文字，更清晰
+        QPainterPath path;
+        path.addText(w/2 - 40, h/2 + 40, countdownFont, QString::number(secondsLeft));
+
+        p.setBrush(QColor(255, 255, 0)); // 黄色填充
+        p.setPen(QPen(Qt::black, 3));    // 黑色描边
+        p.drawPath(path);
+    }
+
+    // 绘制判定结果文字
+    else if (m_feedbackTimer > 0) {
+        m_feedbackTimer--;
+        QFont font = p.font();
         font.setPointSize(24); font.setBold(true); p.setFont(font);
         p.setPen(m_lastJudgmentColor);
         int textY = judgmentY - 100 - (30 - m_feedbackTimer);
@@ -492,8 +572,15 @@ void GameWidget::loadSettings() {
     QSettings settings("MugDiffusion", "OsuQuickReader");
 
     m_config.scrollSpeed = settings.value("scrollSpeed", 0.9).toDouble();
-    m_config.judgeWindow.miss = settings.value("missWindow", 150).toInt();
     m_config.gameWidth = settings.value("gameWidth", 500).toInt();
+
+    m_config.songFolder = settings.value("songFolder", "").toString();
+    m_config.audioOffset = settings.value("audioOffset", 0).toInt();
+
+    m_config.judgeWindow.perfect = settings.value("judge_perfect", 40).toInt();
+    m_config.judgeWindow.great = settings.value("judge_great", 80).toInt();
+    m_config.judgeWindow.good = settings.value("judge_good", 120).toInt();
+    m_config.judgeWindow.miss = settings.value("judge_miss", 150).toInt();
 
     m_config.keyMapping[0] = settings.value("key1", (int)Qt::Key_D).toInt();
     m_config.keyMapping[1] = settings.value("key2", (int)Qt::Key_F).toInt();
@@ -505,8 +592,16 @@ void GameWidget::saveSettings() {
     QSettings settings("MugDiffusion", "OsuQuickReader");
 
     settings.setValue("scrollSpeed", m_config.scrollSpeed);
-    settings.setValue("missWindow", m_config.judgeWindow.miss);
     settings.setValue("gameWidth", m_config.gameWidth);
+
+    settings.setValue("songFolder", m_config.songFolder);
+    settings.setValue("audioOffset", m_config.audioOffset);
+
+    settings.setValue("judge_perfect", m_config.judgeWindow.perfect);
+    settings.setValue("judge_great", m_config.judgeWindow.great);
+    settings.setValue("judge_good", m_config.judgeWindow.good);
+    settings.setValue("judge_miss", m_config.judgeWindow.miss);
+
     settings.setValue("key1", m_config.keyMapping[0]);
     settings.setValue("key2", m_config.keyMapping[1]);
     settings.setValue("key3", m_config.keyMapping[2]);
@@ -531,6 +626,7 @@ void GameWidget::checkRelease(int col) {
 
                 m_combo = 0;
                 m_countMiss++; // 增加 Miss 计数
+                m_totalHits++;
                 m_lastJudgmentText = "MISS (Early)";
                 m_lastJudgmentColor = Qt::red;
                 m_feedbackTimer = 20;
@@ -571,9 +667,9 @@ void GameWidget::checkRelease(int col) {
             } else {
                 // 勉强在 Miss 窗口边缘松手
                 weight = 50;
-                m_lastJudgmentText = "BAD";
-                m_lastJudgmentColor = Qt::darkRed;
-                m_countGood++; // 算作 Good 或 Bad
+                m_lastJudgmentText = "GOOD";
+                m_lastJudgmentColor = Qt::blue;
+                m_countGood++;
                 m_totalAccWeight += 0.5;
             }
 
@@ -606,4 +702,75 @@ bool GameWidget::focusNextPrevChild(bool next) {
     // 返回 false 表示：我不处理焦点切换，请把按键事件交给我自己处理
     // 这样 Tab 键就会进入 keyPressEvent，而不会跳到其他按钮上
     return false;
+}
+
+void GameWidget::saveRecord() {
+    // 1. 构建记录对象
+    QJsonObject recordObj;
+    // 唯一标识：Artist + Title + Version
+    QString mapHash = m_currentArtist + m_currentTitle + m_currentVersion;
+    recordObj["hash"] = mapHash;
+    recordObj["score"] = m_score;
+    recordObj["acc"] = (m_totalHits == 0) ? 0.0 : (m_totalAccWeight / m_totalHits) * 100.0;
+    recordObj["combo"] = m_maxCombo;
+    recordObj["grade"] = getGrade();
+    recordObj["perfect"] = m_countPerfect;
+    recordObj["great"] = m_countGreat;
+    recordObj["good"] = m_countGood;
+    recordObj["miss"] = m_countMiss;
+    recordObj["date"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+    // 记录当时用的判定区间
+    QJsonObject judgeObj;
+    judgeObj["perfect"] = m_config.judgeWindow.perfect;
+    judgeObj["miss"] = m_config.judgeWindow.miss;
+    recordObj["judgment"] = judgeObj;
+
+    // 2. 确定保存路径: ./records/
+    QString dirPath = QCoreApplication::applicationDirPath() + "/records";
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+        bool ok = dir.mkpath(".");
+        if (!ok) {
+            qDebug() << "ERROR: Failed to create records directory at:" << dirPath;
+            return;
+        }
+    }
+
+    // 文件名使用 Hash 或者时间戳，这里用 追加模式存到一个大文件 或者 单文件
+    // 为了方便读取历史，我们将所有记录存为一个 records.json 列表，或者每个谱面一个文件
+    // 这里采用：每个谱面一个 .json 文件，文件名是 hash 的 md5 (为了避开文件名非法字符)
+
+    QString safeName = QString(QCryptographicHash::hash(mapHash.toUtf8(), QCryptographicHash::Md5).toHex());
+    QString filePath = dirPath + "/" + safeName + ".json";
+
+    // 读取旧记录 (如果是列表)
+    QJsonArray history;
+    QFile file(filePath);
+    if (file.open(QIODevice::ReadOnly)) {
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        history = doc.array();
+        file.close();
+    }
+
+    // 添加新记录
+    history.append(recordObj);
+
+    // 排序？取最高分？这里保留所有历史
+
+    // 写入
+    if (file.open(QIODevice::WriteOnly)) {
+        QJsonDocument doc(history);
+        file.write(doc.toJson());
+        file.close();
+
+        // === 打印成功信息，方便你在 Qt Creator 的 Application Output 里看到 ===
+        qDebug() << "========================================";
+        qDebug() << "Record SAVED Successfully!";
+        qDebug() << "Path:" << filePath;
+        qDebug() << "Score:" << m_score;
+        qDebug() << "========================================";
+    } else {
+        qDebug() << "ERROR: Could not open file for writing:" << filePath;
+    }
 }

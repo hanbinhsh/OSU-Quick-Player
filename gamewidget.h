@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <QElapsedTimer> // 必须引用
 #include <vector>
+#include <QCryptographicHash>
 #include "Structs.h"
 
 // 继承 QOpenGLWidget 以获得硬件加速
@@ -73,6 +74,7 @@ private:
     QString m_currentTitle;
     QString m_currentArtist;
     qint64 m_songDuration = 0;
+    QString m_currentVersion = "";
 
     void calculateScore(int weight); // 新增：统一算分函数
     QString getGrade() const;        // 新增：获取评级字符
@@ -80,8 +82,13 @@ private:
     double m_currentRawScore = 0; // 当前累积的权重分 (Perfect=300, Miss=0)
     double m_maxPossibleScore = 1; // 理论最大权重分 (总Note数 * 300)
 
+    QElapsedTimer m_preGameTimer;
+    qint64 m_preGameStartTime = 0; // 记录延迟开始的绝对时间
+    bool m_preGameCountingDown = false; // 是否正在倒计时
+
     void saveSettings();
     void loadSettings();
+    void saveRecord();
 };
 
 #endif // GAMEWIDGET_H

@@ -17,6 +17,9 @@ qt_add_executable(OSU_Quick_Reader
     settingsdialog.ui
     settingsdialog.h
     settingsdialog.cpp
+    songselectwindow.h
+    songselectwindow.cpp
+    songselectwindow.ui
 )
 
 target_link_libraries(OSU_Quick_Reader

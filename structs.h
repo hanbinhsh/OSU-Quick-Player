@@ -2,6 +2,8 @@
 #define STRUCTS_H
 
 #include <Qt>
+#include <QString>
+#include <QDateTime>
 
 // 单个音符结构
 struct Note {
@@ -22,11 +24,43 @@ struct JudgmentWindow {
     int miss = 150;
 };
 
+// 游玩记录结构 (用于保存到 JSON)
+struct PlayRecord {
+    QString songHash; // 唯一标识 (Artist + Title + Version)
+    int score;
+    double acc;
+    int combo;
+    int maxCombo;
+    QString grade;
+    int countPerfect;
+    int countGreat;
+    int countGood;
+    int countMiss;
+
+    // 记录当时的判定难度，方便回看
+    JudgmentWindow usedJudgeWindow;
+    QDateTime timestamp;
+};
+
 struct GameConfig {
     double scrollSpeed = 0.9;
+    int gameWidth = 500;
+    int audioOffset = 0;
+    QString songFolder = "";
+
+    int preGameDelay = 2000; // 默认 2000ms (2秒)
     int keyMapping[4] = { Qt::Key_D, Qt::Key_F, Qt::Key_J, Qt::Key_K };
     JudgmentWindow judgeWindow;
-    int gameWidth = 500;
+};
+
+struct BeatmapInfo {
+    QString filePath;
+    QString title;
+    QString artist;
+    QString version; // 难度名
+    QString audioFilename;
+    // 生成一个唯一ID用于关联成绩
+    QString getHash() const { return artist + title + version; }
 };
 
 #endif // STRUCTS_H

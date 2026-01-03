@@ -9,6 +9,13 @@ SettingsDialog::SettingsDialog(GameConfig currentConfig, QWidget *parent)
     // 绑定数据到 UI
     ui->spinSpeed->setValue(m_config.scrollSpeed);
     ui->spinWidth->setValue(m_config.gameWidth);
+
+    ui->spinOffset->setValue(m_config.audioOffset);
+    ui->spinPreGameDelay->setValue(m_config.preGameDelay);
+
+    ui->spinJ_Perfect->setValue(m_config.judgeWindow.perfect);
+    ui->spinJ_Great->setValue(m_config.judgeWindow.great);
+    ui->spinJ_Good->setValue(m_config.judgeWindow.good);
     ui->spinMissWindow->setValue(m_config.judgeWindow.miss);
 
     // 连接信号
@@ -88,6 +95,13 @@ GameConfig SettingsDialog::getConfig() const {
     GameConfig c = m_config;
     c.scrollSpeed = ui->spinSpeed->value();
     c.gameWidth = ui->spinWidth->value();
+
+    c.audioOffset = ui->spinOffset->value();
+    c.preGameDelay = ui->spinPreGameDelay->value();
+
+    c.judgeWindow.perfect = ui->spinJ_Perfect->value();
+    c.judgeWindow.great = ui->spinJ_Great->value();
+    c.judgeWindow.good = ui->spinJ_Good->value();
     c.judgeWindow.miss = ui->spinMissWindow->value();
     return c;
 }

@@ -2,7 +2,8 @@
 #include "ui_MainWindow.h"
 #include "SettingsDialog.h"
 #include <QFileDialog>
-#include <QVBoxLayout> // 必须引用
+#include <QVBoxLayout>
+#include "SongSelectWindow.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -46,10 +47,22 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::onOpenTriggered() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Open osu file", "", "Osu Files (*.osu)");
-    if (!fileName.isEmpty()) {
-        m_gameWidget->loadBeatmap(fileName);
-        m_gameWidget->setFocus();
+    // 传入当前配置 (包含 songFolder)
+    // 注意：getConfig 返回的是拷贝，我们需要传入引用或者在 MainWindow 维护一份 Config
+    // 简单起见，我们从 GameWidget 获取 Config，修改完再 Update 回去
+
+    GameConfig config = m_gameWidget->getConfig();
+    SongSelectWindow dlg(config, this); // 传入引用
+
+    if (dlg.exec() == QDialog::Accepted) {
+        // 如果用户在选歌界面改了文件夹，这里会通过引用更新 config
+        m_gameWidget->updateConfig(config);
+
+        QString path = dlg.getSelectedBeatmapPath();
+        if (!path.isEmpty()) {
+            m_gameWidget->loadBeatmap(path);
+            m_gameWidget->setFocus();
+        }
     }
 }
 
